@@ -6,7 +6,7 @@ const { execSync } = require("child_process");
 const os = require("os");
 
 /**
- * Local development server for testing providers
+ * Local development server for testing providers .
  */
 class DevServer {
   constructor() {
