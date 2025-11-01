@@ -11,7 +11,7 @@ const os = require("os");
 class DevServer {
   constructor() {
     this.app = express();
-    this.port = 3001;
+    this.port = 3002;
     this.distDir = path.join(__dirname, "dist");
     this.currentDir = path.join(__dirname);
 
@@ -70,50 +70,160 @@ class DevServer {
       }
     });
 
-    // Get provider catalog
+    // Get provider catalog - Updated to match frontend expectations
     this.app.get("/catalog/:provider", (req, res) => {
       try {
         const { provider } = req.params;
         const catalogPath = path.join(__dirname, "providers", provider, "catalog.ts");
 
+        let catalog = [];
+        let genres = [];
+
         if (fs.existsSync(catalogPath)) {
           // Read and parse the TypeScript catalog file
           const catalogContent = fs.readFileSync(catalogPath, 'utf8');
 
-          // Extract catalog array using regex - more flexible pattern
+          // Extract catalog array
           const catalogMatch = catalogContent.match(/export const catalog = (\[[\s\S]*?\]);/);
           if (catalogMatch) {
             try {
-              // Convert TypeScript object notation to JSON
               let catalogStr = catalogMatch[1]
-                .replace(/(\w+):\s*/g, '"$1": ') // Convert property names to quoted strings with proper spacing
-                .replace(/,(\s*[\]\}])/g, '$1') // Remove trailing commas
-                .replace(/'/g, '"'); // Convert single quotes to double quotes
-
-              console.log('Parsing catalog string:', catalogStr);
-              const catalog = JSON.parse(catalogStr);
-              console.log(`Loaded catalog for ${provider}:`, catalog);
-              res.json(catalog);
-              return;
+                .replace(/(\w+):\s*/g, '"$1": ')
+                .replace(/,(\s*[\]\}])/g, '$1')
+                .replace(/'/g, '"');
+              catalog = JSON.parse(catalogStr);
             } catch (parseError) {
               console.error('Failed to parse catalog:', parseError);
-              console.log('Raw catalog match:', catalogMatch[1]);
-              console.log('Processed catalog string:', catalogStr);
             }
-          } else {
-            console.log('No catalog match found in:', catalogContent.substring(0, 200));
           }
-        } else {
-          console.log('Catalog file not found:', catalogPath);
+
+          // Extract genres array
+          const genresMatch = catalogContent.match(/export const genres = (\[[\s\S]*?\]);/);
+          if (genresMatch) {
+            try {
+              let genresStr = genresMatch[1]
+                .replace(/(\w+):\s*/g, '"$1": ')
+                .replace(/,(\s*[\]\}])/g, '$1')
+                .replace(/'/g, '"');
+              genres = JSON.parse(genresStr);
+            } catch (parseError) {
+              console.error('Failed to parse genres:', parseError);
+            }
+          }
         }
 
-        // Fallback to default catalog
-        res.json([
-          { title: 'Popular', filter: '' },
-          { title: 'Latest', filter: 'latest' }
-        ]);
+        // Fallback to default if empty
+        if (catalog.length === 0) {
+          catalog = [
+            { title: 'Popular', filter: '' },
+            { title: 'Latest', filter: 'latest' }
+          ];
+        }
+
+        // Return in the format expected by frontend
+        res.json({ catalog, genres });
       } catch (error) {
         console.error("Catalog error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Posts endpoint - GET /posts/:provider
+    this.app.get("/posts/:provider", async (req, res) => {
+      try {
+        const { provider } = req.params;
+        const { filter = '', page = 1 } = req.query;
+
+        const result = await this.executeProviderFunction(provider, 'getPosts', {
+          filter: filter,
+          page: parseInt(page)
+        });
+
+        res.json(result);
+      } catch (error) {
+        console.error("Posts error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Search endpoint - GET /search/:provider
+    this.app.get("/search/:provider", async (req, res) => {
+      try {
+        const { provider } = req.params;
+        const { query = '', page = 1 } = req.query;
+
+        const result = await this.executeProviderFunction(provider, 'getSearchPosts', {
+          searchQuery: query,
+          page: parseInt(page)
+        });
+
+        res.json(result);
+      } catch (error) {
+        console.error("Search error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Meta endpoint - GET /meta/:provider
+    this.app.get("/meta/:provider", async (req, res) => {
+      try {
+        const { provider } = req.params;
+        const { link } = req.query;
+
+        if (!link) {
+          return res.status(400).json({ error: "Link parameter is required" });
+        }
+
+        const result = await this.executeProviderFunction(provider, 'getMeta', {
+          link: link
+        });
+
+        res.json(result);
+      } catch (error) {
+        console.error("Meta error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Stream endpoint - GET /stream/:provider
+    this.app.get("/stream/:provider", async (req, res) => {
+      try {
+        const { provider } = req.params;
+        const { link, type } = req.query;
+
+        if (!link) {
+          return res.status(400).json({ error: "Link parameter is required" });
+        }
+
+        const result = await this.executeProviderFunction(provider, 'getStream', {
+          link: link,
+          type: type
+        });
+
+        res.json(result);
+      } catch (error) {
+        console.error("Stream error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Episodes endpoint - GET /episodes/:provider
+    this.app.get("/episodes/:provider", async (req, res) => {
+      try {
+        const { provider } = req.params;
+        const { url } = req.query;
+
+        if (!url) {
+          return res.status(400).json({ error: "URL parameter is required" });
+        }
+
+        const result = await this.executeProviderFunction(provider, 'getEpisodes', {
+          url: url
+        });
+
+        res.json(result);
+      } catch (error) {
+        console.error("Episodes error:", error);
         res.status(500).json({ error: error.message });
       }
     });

@@ -5,7 +5,7 @@
     "version": "1.9",
     "icon": "",
     "type": "global",
-    "disabled": true
+    "disabled": false
   },
   {
     "display_name": "MultiStream",
@@ -13,7 +13,7 @@
     "version": "1.4",
     "icon": "",
     "type": "global",
-    "disabled": true
+    "disabled": false
   },
   {
     "display_name": "MoviesDrive",
